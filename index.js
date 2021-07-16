@@ -77,7 +77,8 @@ const {
   withDelimiter,
   listUnpaired,
   cancelDiscovery,
-  setServices
+  setServices,
+  initBluetooth
 } = BluetoothSerial;
 
 BluetoothSerial.disconnect = (id = null) => disconnect(id);
@@ -94,6 +95,7 @@ BluetoothSerial.setServices = (services, includeDefaultServices = true) =>
   setServices(services, includeDefaultServices);
 BluetoothSerial.discoverUnpairedDevices = listUnpaired;
 BluetoothSerial.stopScanning = cancelDiscovery;
+BluetoothSerial.initBluetooth = initBluetooth;
 
 /**
  * Select a specific bluetooth device and

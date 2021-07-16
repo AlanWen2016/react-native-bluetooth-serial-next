@@ -292,6 +292,8 @@ declare namespace BluetoothSerial {
    */
   export function setAdapterName(name: string): Promise<string>;
 
+  export function initBluetooth(): Promise<string>;
+
   /**
    * Set delimiter split the buffer data
    * when you are reading from device.

@@ -1,14 +1,14 @@
 /*
- 
+
  Created by Nuttawut Malee on 10.11.18.
  Copyright © 2016 Nuttawut Malee. All rights reserved.
- 
+
  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
- 
+
  The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
- 
+
  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- 
+
  */
 
 #import "RCTBluetoothSerial.h"
@@ -32,7 +32,7 @@ RCT_EXPORT_MODULE();
         _delimiters = [NSMutableDictionary dictionary];
         _connectionPromises = [NSMutableDictionary dictionary];
         _doesHaveListeners = FALSE;
-        
+
         _ble = [BLE sharedInstance];
         [_ble setDelegate:self];
     }
@@ -46,10 +46,10 @@ RCT_EXPORT_MODULE();
     return dispatch_get_main_queue();
 }
 
-// + (BOOL)requiresMainQueueSetup
-// {
-//     return NO;
-// }
+ + (BOOL)requiresMainQueueSetup
+ {
+     return NO;
+ }
 
 /*----------------------------------------------------*/
 #pragma mark - React Native Methods Available in Javascript -
@@ -59,6 +59,19 @@ RCT_EXPORT_MODULE();
 {
     return @{@"DEFAULT_SERVICES":[self.ble getDefaultServices]};
 }
+
+
+RCT_EXPORT_METHOD(initBluetooth:(RCTPromiseResolveBlock)resolve
+                  rejector:(RCTPromiseRejectBlock)reject)
+{
+    // Apple does not support programmatically requesting enable central manager
+    NSString *message = @"init bluetooth service; ";
+    [self.ble initManage];
+//     NSError *error = [NSError errorWithDomain:@"no_support" code:500 userInfo:@{NSLocalizedDescriptionKey:message}];
+//     [self onError:message];
+    resolve(message);
+}
+
 
 RCT_EXPORT_METHOD(requestEnable:(RCTPromiseResolveBlock)resolve
                   rejector:(RCTPromiseRejectBlock)reject)
@@ -105,7 +118,7 @@ RCT_EXPORT_METHOD(list:(RCTPromiseResolveBlock)resolve
                   rejector:(RCTPromiseRejectBlock)reject)
 {
     NSLog(@"List peripherals");
-    
+
     [self.ble scanForPeripheralsByInterval:(float)3.0 completion:^(NSMutableArray *peripherals) {
         NSMutableArray *result = [self getPeripheralList:peripherals];
         resolve(result);
@@ -156,30 +169,30 @@ RCT_EXPORT_METHOD(connect:(NSString *)uuid
                   rejector:(RCTPromiseRejectBlock)reject)
 {
     NSLog(@"Connect to peripheral");
-    
+
     // Disconnect from selected active peripheral
     NSMutableDictionary *dict = [self.ble.activePeripherals objectForKey:uuid];
-    
+
     if (dict) {
         CBPeripheral *peripheral = [dict objectForKey:@"peripheral"];
-        
+
         if (peripheral) {
             if (peripheral.state == CBPeripheralStateConnected) {
                 [self.ble disconnectFromPeripheral:peripheral];
             }
         }
     }
-    
+
     NSMutableDictionary *promises = [NSMutableDictionary dictionary];
     [promises setObject:resolve forKey:@"resolver"];
     [promises setObject:reject forKey:@"rejector"];
-    
+
     [self.connectionPromises setObject:promises forKey:uuid];
 
     [NSObject cancelPreviousPerformRequestsWithTarget:self
                                              selector:@selector(findBLEPeripheralByUUID:completion:)
                                                object:nil];
-    
+
     [self findBLEPeripheralByUUID:uuid completion:^(CBPeripheral *peripheral) {
         if (peripheral) {
             NSLog(@"Connecting to device (UUID : %@)", peripheral.identifier.UUIDString);
@@ -187,7 +200,7 @@ RCT_EXPORT_METHOD(connect:(NSString *)uuid
             if (![[self.delimiters allKeys] containsObject:peripheral.identifier.UUIDString]) {
                 [self.delimiters setValue:[[NSMutableString alloc] initWithString:@""] forKey:peripheral.identifier.UUIDString];
             }
-            
+
             if (![[self.buffers allKeys] containsObject:peripheral.identifier.UUIDString]) {
                 [self.buffers setValue:[[NSMutableString alloc] init] forKey:peripheral.identifier.UUIDString];
             }
@@ -207,9 +220,9 @@ RCT_EXPORT_METHOD(disconnect:(NSString *)uuid
                   rejector:(RCTPromiseRejectBlock)reject)
 {
     NSLog(@"Disconnect from peripheral");
-    
+
     CBPeripheral *activePeripheral = [self.ble getActivePeripheral:uuid];
-    
+
     // Disconnect from selected active peripheral
     if (activePeripheral) {
         if (activePeripheral.state == CBPeripheralStateConnected) {
@@ -223,18 +236,18 @@ RCT_EXPORT_METHOD(disconnect:(NSString *)uuid
 RCT_EXPORT_METHOD(disconnectAll:(RCTPromiseResolveBlock)resolve rejector:(RCTPromiseRejectBlock)reject)
 {
     NSLog(@"Disconnect from all peripherals");
-    
+
     NSMutableDictionary *peripherals = [[NSMutableDictionary alloc] initWithDictionary:self.ble.activePeripherals];
-    
+
     if ([peripherals count] > 0) {
         NSArray *keys = [peripherals allKeys];
-        
+
         for (NSString *key in keys) {
             NSMutableDictionary *dict = [[NSMutableDictionary alloc] initWithDictionary:[peripherals objectForKey:key]];
-            
+
             if (dict) {
                 CBPeripheral *p = [dict objectForKey:@"peripheral"];
-                
+
                 if (p) {
                     if (p.state == CBPeripheralStateConnected) {
                         [self.ble disconnectFromPeripheral:p];
@@ -268,10 +281,10 @@ RCT_EXPORT_METHOD(withDelimiter:(NSString *)delimiter
     if (![delimiter isKindOfClass:[NSNull class]] | (uuid == nil)) {
         NSMutableString *newDelimiter = [[NSMutableString alloc] initWithString:delimiter];
         NSLog(@"Set delimiter to %@ for UUID : %@", newDelimiter, uuid);
-        
+
         if ([uuid isKindOfClass:[NSNull class]] | (uuid == nil)) {
             CBPeripheral *activePeripheral = [self.ble getActivePeripheral:uuid];
-            
+
             if (activePeripheral) {
                 [self.delimiters setValue:newDelimiter forKey:activePeripheral.identifier.UUIDString];
                 [deviceUUID setString:activePeripheral.identifier.UUIDString];
@@ -281,7 +294,7 @@ RCT_EXPORT_METHOD(withDelimiter:(NSString *)delimiter
             [deviceUUID setString:uuid];
         }
     }
-    
+
     resolve(deviceUUID);
 }
 
@@ -290,17 +303,17 @@ RCT_EXPORT_METHOD(clear:(NSString *)uuid
                   rejector:(RCTPromiseRejectBlock)reject)
 {
     NSMutableString *activeUUID = nil;
-    
+
     if ([uuid isKindOfClass:[NSNull class]] | (uuid == nil)) {
         CBPeripheral *activePeripheral = [self.ble getActivePeripheral:uuid];
-        
+
         if (activePeripheral) {
             [activeUUID setString:activePeripheral.identifier.UUIDString];
         }
     } else {
         [activeUUID setString:uuid];
     }
-    
+
     if ([[self.buffers allKeys] containsObject:activeUUID]) {
         NSMutableString *buffer = [self.buffers valueForKey:activeUUID];
         long end = [buffer length] - 1;
@@ -317,10 +330,10 @@ RCT_EXPORT_METHOD(available:(NSString *)uuid
                   rejector:(RCTPromiseRejectBlock)reject)
 {
     NSMutableString *activeUUID = nil;
-    
+
     if ([uuid isKindOfClass:[NSNull class]] | (uuid == nil)) {
         CBPeripheral *activePeripheral = [self.ble getActivePeripheral:uuid];
-        
+
         if (activePeripheral) {
             [activeUUID setString:activePeripheral.identifier.UUIDString];
         }
@@ -329,7 +342,7 @@ RCT_EXPORT_METHOD(available:(NSString *)uuid
     }
 
     NSNumber *bufferLength = 0;
-    
+
     if ([[self.buffers allKeys] containsObject:activeUUID]) {
         NSMutableString *buffer = [self.buffers valueForKey:uuid];
         bufferLength = [NSNumber numberWithInteger:[buffer length]];
@@ -360,9 +373,9 @@ RCT_EXPORT_METHOD(setServices:(NSArray *)services
         if (includeDefault) {
             mutableServices = [[NSMutableArray alloc] initWithArray:[self.ble includeDefaultServices:mutableServices]];
         }
-        
+
         [self.ble setBleServices:[self.ble servicesArrayToDictionary:mutableServices]];
-        
+
         NSArray *services = [self.ble servicesDictionaryToArray:self.ble.bleServices];
         resolve(services);
     } else {
@@ -410,12 +423,12 @@ RCT_EXPORT_METHOD(readFromDevice:(NSString *)uuid
 {
     NSLog(@"Read from active device");
     NSString *message = @"";
-    
+
     NSMutableString *activeUUID = nil;
-    
+
     if ([uuid isKindOfClass:[NSNull class]] | (uuid == nil)) {
         CBPeripheral *activePeripheral = [self.ble getActivePeripheral:uuid];
-        
+
         if (activePeripheral) {
             [activeUUID setString:activePeripheral.identifier.UUIDString];
         }
@@ -453,13 +466,13 @@ RCT_EXPORT_METHOD(readUntilDelimiter:(NSString *)delimiter
                      completion:(RCTBluetoothSerialPeripheralCallback)callback
 {
     NSLog(@"Scanning for BLE Peripherals: %@", uuid);
-    
+
     // Scan for peripherals.
     // If the uuid is null or blank, scan and
     // connect to the first available device.
     [self.ble scanForPeripheralsByInterval:(float)3.0 completion:^(NSMutableArray *peripherals) {
         CBPeripheral *peripheral = nil;
-        
+
         if ([peripherals count] < 1) {
             [self onError:@"Did not find any BLE peripherals"];
         } else {
@@ -476,7 +489,7 @@ RCT_EXPORT_METHOD(readUntilDelimiter:(NSString *)delimiter
                 }
             }
         }
-        
+
         if (callback) {
             callback(peripheral);
         }
@@ -486,7 +499,7 @@ RCT_EXPORT_METHOD(readUntilDelimiter:(NSString *)delimiter
 - (NSMutableArray *)getPeripheralList:(NSMutableArray *)peripherals
 {
     NSMutableArray *result = [NSMutableArray array];
-    
+
     if ([peripherals count] > 0) {
         for (int i = 0; i < peripherals.count; i++) {
             CBPeripheral *peripheral = [self.ble.peripherals objectAtIndex:i];
@@ -494,7 +507,7 @@ RCT_EXPORT_METHOD(readUntilDelimiter:(NSString *)delimiter
             [result addObject:dict];
         }
     }
-    
+
     return result;
 }
 
@@ -504,20 +517,20 @@ RCT_EXPORT_METHOD(readUntilDelimiter:(NSString *)delimiter
 
     if ([uuid isKindOfClass:[NSNull class]] | (uuid == nil)) {
         CBPeripheral *activePeripheral = [self.ble getActivePeripheral:uuid];
-        
+
         if (activePeripheral) {
             [activeUUID setString:activePeripheral.identifier.UUIDString];
         }
     } else {
         [activeUUID setString:uuid];
     }
-    
+
     NSString *message = @"";
-    
+
     if ([[self.buffers allKeys] containsObject:activeUUID]) {
         NSMutableString *buffer = [self.buffers valueForKey:activeUUID];
         NSRange range = [buffer rangeOfString:delimiter];
-        
+
         if (range.location != NSNotFound) {
             long end = range.location + range.length;
             message = [buffer substringToIndex:end];
@@ -533,7 +546,7 @@ RCT_EXPORT_METHOD(readUntilDelimiter:(NSString *)delimiter
 - (void)onError:(NSString *)message
 {
     NSLog(@"%@", message);
-    
+
     if (self.doesHaveListeners) {
         [self sendEventWithName:@"error" body:@{@"message":message}];
     }
@@ -546,7 +559,7 @@ RCT_EXPORT_METHOD(readUntilDelimiter:(NSString *)delimiter
 - (void)bluetoothPowerStateTimer:(NSTimer *)timer
 {
     RCTPromiseResolveBlock resolve = [timer userInfo];
-    
+
     if (self.ble.isCentralReady) {
         resolve((id)kCFBooleanTrue);
     } else {
@@ -576,17 +589,17 @@ RCT_EXPORT_METHOD(readUntilDelimiter:(NSString *)delimiter
 {
     NSMutableDictionary *device = [self.ble peripheralToDictionary:peripheral];
     NSString *message = [NSString stringWithFormat:@"Connected to BLE peripheral (UUID : %@)", peripheral.identifier.UUIDString];
-    
+
     NSLog(@"%@", message);
-    
+
     if (self.doesHaveListeners) {
         [self sendEventWithName:@"connectionSuccess" body:@{@"message":message, @"device":device}];
     }
-    
+
     if ([[self.connectionPromises allKeys] containsObject:peripheral.identifier.UUIDString]) {
         NSMutableDictionary *dict = [self.connectionPromises objectForKey:peripheral.identifier.UUIDString];
         RCTPromiseResolveBlock resolver = [dict objectForKey:@"resolver"];
-        
+
         if (resolver) {
             resolver(device);
         }
@@ -599,15 +612,15 @@ RCT_EXPORT_METHOD(readUntilDelimiter:(NSString *)delimiter
     NSString *message = [NSString stringWithFormat:@"Unable to connect to BLE peripheral (UUID : %@)", peripheral.identifier.UUIDString];
 
     NSLog(@"%@", message);
-    
+
     if (self.doesHaveListeners) {
         [self sendEventWithName:@"connectionFailed" body:@{@"message":message, @"device":device}];
     }
-    
+
     if ([[self.connectionPromises allKeys] containsObject:peripheral.identifier.UUIDString]) {
         NSMutableDictionary *dict = [self.connectionPromises objectForKey:peripheral.identifier.UUIDString];
         RCTPromiseRejectBlock reject = [dict objectForKey:@"rejector"];
-        
+
         if (reject) {
             NSError *err = [NSError errorWithDomain:@"fail_to_connect" code:500 userInfo:@{NSLocalizedDescriptionKey:message}];
             reject(@"wrong_uuid", message, err);
@@ -619,9 +632,9 @@ RCT_EXPORT_METHOD(readUntilDelimiter:(NSString *)delimiter
 {
     NSMutableDictionary *device = [self.ble peripheralToDictionary:peripheral];
     NSString *message = [NSString stringWithFormat:@"BLE peripheral (UUID : %@) connection lost", peripheral.identifier.UUIDString];
-    
+
     NSLog(@"%@", message);
-    
+
     if (self.doesHaveListeners) {
         [self sendEventWithName:@"connectionLost" body:@{@"message":message, @"device":device}];
     }
@@ -632,28 +645,28 @@ RCT_EXPORT_METHOD(readUntilDelimiter:(NSString *)delimiter
 - (void)didReceiveData:(NSString *)uuid data:(unsigned char *)data length:(NSInteger)length
 {
     NSLog(@"Received data from peripheral UUID : %@", uuid);
-    
+
     NSData *d = [NSData dataWithBytes:data length:length];
     NSString *s = [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding];
-    
+
     if (s) {
         NSLog(@"Received %@", s);
-        
+
         // Append buffers
         if ([[self.buffers allKeys] containsObject:uuid]) {
             NSMutableString *buffer = [self.buffers valueForKey:uuid];
             [buffer appendString:s];
             [self.buffers setValue:buffer forKey:uuid];
         }
-            
+
         NSMutableString *delimiter = [[NSMutableString alloc] initWithString:@""];
 
         if ([[self.delimiters allKeys] containsObject:uuid]) {
             [delimiter setString:[self.delimiters valueForKey:uuid]];
         }
-            
+
         NSLog(@"Read until delimiter : %@", delimiter);
-            
+
         NSString *message = [self readUntil:uuid delimiter:delimiter];
 
         if ([message length] > 0) {
